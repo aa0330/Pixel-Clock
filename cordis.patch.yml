@@ -1,0 +1,3 @@
+- insert:
+    - id: pixel-clock
+      name: '@local/pixel-clock'

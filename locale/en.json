@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Pixel Clock",
+    "description": "A floating pixel clock with a frosted pixel-font label tinted like the current planet. Defaults to a desktop always-on-top window, with an in-app/desktop switch, multiple worlds, adjustable size and right-click controls."
+  }
+}
