@@ -2,6 +2,10 @@
 
 <img src="./icon.svg" width="96" alt="Pixel Clock" />
 
+[![CI](https://github.com/aa0330/Pixel-Clock/actions/workflows/ci.yml/badge.svg)](https://github.com/aa0330/Pixel-Clock/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/aa0330/Pixel-Clock?label=release)](https://github.com/aa0330/Pixel-Clock/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 一个运行在 DeepSeek Harness（DSH）里的悬浮像素星球番茄钟。默认以真实置顶窗口停留在桌面上，也可以在设置里切回应用内模式；球体大小可调，右键打开设置，支持专注 / 休息计时、待办与提醒。
 
 ## 功能
