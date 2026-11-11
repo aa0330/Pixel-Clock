@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('pixelClockDesktop', {
   getState: () => ipcRenderer.invoke('pixel-clock:get-state'),
+  systemVolume: () => ipcRenderer.invoke('pixel-clock:system-volume'),
   sync: (state) => ipcRenderer.send('pixel-clock:sync', state),
   layout: (payload) => ipcRenderer.invoke('pixel-clock:layout', payload),
   beginDrag: (x, y) => ipcRenderer.send('pixel-clock:begin-drag', x, y),

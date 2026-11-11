@@ -135,12 +135,17 @@ assert(html.includes('[cycleHint]'), 'cycle hint is localized');
 // the settings tab owns artwork, size, location and durations
 html = mount('settings panel', 'settings');
 assert(html.includes('data-panel="settings"'), 'settings tab is active');
-assert((html.match(/aria-pressed="true"/g) || []).length === 5, 'theme, location and three duration presets selected');
-assert((html.match(/type="range"/g) || []).length === 1, 'size slider renders');
+assert((html.match(/aria-pressed="true"/g) || []).length === 6, 'theme, location, three duration presets and one of four tracks selected');
+assert((html.match(/type="range"/g) || []).length === 2, 'size and music volume sliders render');
 assert(html.includes('min="80"') && html.includes('max="180"'), 'size slider is bounded');
+assert(html.includes('min="0"') && html.includes('max="100"'), 'music volume slider is bounded');
 assert(html.includes('[location]') && html.includes('[modeApp]') && html.includes('[modeDesktop]'), 'location modes are localized');
 assert(html.includes('[settingFocus]') && html.includes('[settingBreak]') && html.includes('[settingLong]'), 'duration rows render');
 assert((html.match(/checked=""/g) || []).length === 2, 'default toggles restore');
+assert(html.includes('[music]'), 'music toggle is localized');
+assert(html.includes('__volume'), 'music volume slider renders');
+assert(html.includes('[musicHint]'), 'music hint is localized');
+assert(html.includes('[trackRain]') && html.includes('[trackNight]') && html.includes('[trackIndoor]') && html.includes('[trackEvening]'), 'ambience tracks are localized');
 
 // expired run still advances
 store.set('pixel-clock:reminders', '[]');
@@ -182,7 +187,7 @@ assert(html.includes('50:00'), 'focus preset applies to the idle clock');
 assert(html.includes('width:160px;height:160px'), 'stored size applies to the sphere');
 assert(html.includes('data-status="idle"'), 'settings do not start the timer');
 html = mount('custom settings', 'settings');
-assert((html.match(/aria-pressed="true"/g) || []).length === 5, 'custom preset selected per row');
+assert((html.match(/aria-pressed="true"/g) || []).length === 6, 'custom preset selected per row');
 assert((html.match(/checked=""/g) || []).length === 1, 'stored toggles restore');
 assert(html.includes('aria-pressed="true">[modeApp]'), 'stored in-app location is selected');
 
@@ -192,7 +197,7 @@ html = mount('ice theme', undefined);
 assert(html.includes('data-theme="ice"'), 'stored planet restored');
 assert(html.includes('[themeIce]'), 'planet name is localized');
 assert(html.includes('--ap-accent:#79b7c9'), 'ring accent follows the planet');
-assert(html.includes('[prevPlanet]') && html.includes('[nextPlanet]'), 'planet arrows are labelled');
+assert(html.includes('[prevTrack]') && html.includes('[nextTrack]'), 'ambience arrows are labelled');
 
 // the size setting is clamped to the allowed range
 store.set('pixel-clock:settings', JSON.stringify({ size: 999 }));

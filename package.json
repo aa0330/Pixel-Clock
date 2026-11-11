@@ -1,6 +1,6 @@
 {
   "name": "@local/pixel-clock",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Pixel Clock: a floating pixel planet pomodoro with a frosted pixel-font label. Defaults to a real always-on-top desktop window; switch between in-app and desktop in settings, resize the sphere, and use right-click for controls.",
   "type": "module",
   "icon": "./icon.svg",
@@ -47,6 +47,7 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
+    "assets/**",
     "desktop/**",
     "build.mjs",
     "template.js",

@@ -22,13 +22,27 @@ const fragment = extract(shaders, 'PLANET_FRAGMENT_SHADER');
 const fontData = readFileSync(fontFile).toString('base64');
 const fontUrl = `data:font/woff2;base64,${fontData}`;
 
+const ambience = {};
+for (const [key, file] of Object.entries({
+  RAIN: 'assets/ambience-rain.m4a',
+  NIGHT: 'assets/ambience-night.m4a',
+  INDOOR: 'assets/ambience-indoor.m4a',
+  EVENING: 'assets/ambience-evening.m4a',
+})) {
+  ambience[key] = `data:audio/mp4;base64,${readFileSync(resolve(here, file)).toString('base64')}`;
+}
+
 const template = readFileSync(resolve(here, 'template.js'), 'utf8');
-const output = template
+let output = template
   .split('"__VERTEX_SHADER_JSON__"').join(JSON.stringify(vertex))
   .split('"__FRAGMENT_SHADER_JSON__"').join(JSON.stringify(fragment))
   .split('"__PIXEL_FONT_DATA_URL__"').join(JSON.stringify(fontUrl));
+for (const [key, url] of Object.entries(ambience)) {
+  output = output.split(`"__AMBIENCE_${key}_URL__"`).join(JSON.stringify(url));
+}
 
 writeFileSync(resolve(here, 'client.js'), output);
+const ambienceChars = Object.values(ambience).reduce((sum, url) => sum + url.length, 0);
 console.log(
-  `client.js written: vertex ${vertex.length} chars, fragment ${fragment.length} chars, font ${fontData.length} base64 chars, total ${output.length} chars`,
+  `client.js written: vertex ${vertex.length} chars, fragment ${fragment.length} chars, font ${fontData.length} base64 chars, ambience ${ambienceChars} base64 chars, total ${output.length} chars`,
 );

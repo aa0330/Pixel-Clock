@@ -7,6 +7,7 @@
  * and to hand state back and forth. macOS first; Windows uses the same code.
  */
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { execFile } = require('node:child_process');
 const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -20,11 +21,12 @@ const STATE_FILE = path.join(DATA_DIR, 'state.json');
 const BOUNDS_FILE = path.join(DATA_DIR, 'bounds.json');
 const LOG_FILE = path.join(DATA_DIR, 'helper.log');
 
-const SIDE = 28;
-const TOP = 56;
-const BOTTOM = 28;
-const BASE_MIN_WIDTH = 260;
-const GAP = 12;
+const SIDE = 8;
+const ARROW_SPACE = 30;
+const TOP = 40;
+const BOTTOM = 8;
+const GAP = 8;
+const EDGE = 6;
 const PANEL_WIDTH = 276;
 const PANEL_HEIGHT = 380;
 const MIN_SIZE = 80;
@@ -33,6 +35,7 @@ const MAX_SIZE = 180;
 let win = null;
 let currentState = null;
 let rootOffset = { left: SIDE, top: TOP };
+let planetSize = 124;
 let drag = null;
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -132,37 +135,43 @@ function displayFor(planetX, planetY) {
 }
 
 /** Window bounds that keep the planet at its current screen position. */
-function applyLayout(size, open) {
+function applyLayout(size, open, labelWidth, panelHeight) {
   if (!win || win.isDestroyed()) return { left: SIDE, top: TOP, side: 'left' };
   const bounds = win.getBounds();
   const planetX = bounds.x + rootOffset.left;
   const planetY = bounds.y + rootOffset.top;
   const display = displayFor(planetX, planetY);
 
-  let width = Math.max(size + SIDE * 2, BASE_MIN_WIDTH);
-  let left = Math.round((width - size) / 2);
+  // The window only grows past the planet for the label above it and for the
+  // popover, so the transparent margin stays as small as the content allows.
+  const overhang = Math.max(0, Math.round(((Number(labelWidth) || 0) - size) / 2));
+  const panel = Math.min(PANEL_HEIGHT, Math.max(160, Number(panelHeight) || PANEL_HEIGHT));
+
+  let width = size + overhang * 2 + ARROW_SPACE * 2;
+  let left = ARROW_SPACE + overhang;
   let top = TOP;
   let height = size + TOP + BOTTOM;
   let side = 'left';
 
   if (open) {
-    side = planetX - (PANEL_WIDTH + GAP) >= display.x + 8 ? 'left' : 'right';
-    height = Math.max(height, PANEL_HEIGHT + 24);
+    side = planetX - (PANEL_WIDTH + GAP) >= display.x + EDGE ? 'left' : 'right';
+    height = Math.max(height, panel + SIDE * 2);
     top = Math.max(TOP, Math.round((height - size) / 2));
     if (side === 'left') {
-      left = SIDE + PANEL_WIDTH + GAP;
-      width = left + size + SIDE;
+      left = SIDE + PANEL_WIDTH + GAP + overhang;
+      width = left + size + overhang + SIDE;
     } else {
-      width = SIDE + size + GAP + PANEL_WIDTH + SIDE;
+      width = SIDE + overhang + size + GAP + PANEL_WIDTH + SIDE;
     }
   }
 
   let x = planetX - left;
   let y = planetY - top;
-  x = Math.min(Math.max(x, display.x + 8), display.x + display.width - width - 8);
-  y = Math.min(Math.max(y, display.y + 8), display.y + display.height - height - 8);
+  x = Math.min(Math.max(x, display.x + EDGE), display.x + display.width - width - EDGE);
+  y = Math.min(Math.max(y, display.y + EDGE), display.y + display.height - height - EDGE);
   win.setBounds({ x, y, width, height });
   rootOffset = { left, top };
+  planetSize = size;
   persistBounds();
   return { left, top, side };
 }
@@ -175,15 +184,16 @@ function createWindow(anchor) {
   const size = clampSize(currentState && currentState.settings && currentState.settings.size);
   const saved = loadJson(BOUNDS_FILE);
   const display = screen.getPrimaryDisplay().workArea;
-  const baseWidth = Math.max(size + SIDE * 2, BASE_MIN_WIDTH);
+  const baseWidth = size + ARROW_SPACE * 2;
   const baseHeight = size + TOP + BOTTOM;
-  const baseLeft = Math.round((baseWidth - size) / 2);
+  const baseLeft = ARROW_SPACE;
   let originX = anchor && Number.isFinite(anchor.x) ? anchor.x - baseLeft : saved && Number.isFinite(saved.x) ? saved.x : display.x + display.width - baseWidth - 24;
   let originY = anchor && Number.isFinite(anchor.y) ? anchor.y - TOP : saved && Number.isFinite(saved.y) ? saved.y : display.y + 120;
-  originX = Math.min(Math.max(originX, display.x + 8), display.x + display.width - baseWidth - 8);
-  originY = Math.min(Math.max(originY, display.y + 8), display.y + display.height - baseHeight - 8);
+  originX = Math.min(Math.max(originX, display.x + EDGE), display.x + display.width - baseWidth - EDGE);
+  originY = Math.min(Math.max(originY, display.y + EDGE), display.y + display.height - baseHeight - EDGE);
 
   rootOffset = { left: baseLeft, top: TOP };
+  planetSize = size;
   win = new BrowserWindow({
     x: Math.round(originX),
     y: Math.round(originY),
@@ -318,6 +328,22 @@ setInterval(() => {
 
 ipcMain.handle('pixel-clock:get-state', () => currentState);
 
+/** macOS exposes the output volume through AppleScript; elsewhere report null. */
+ipcMain.handle('pixel-clock:system-volume', () => new Promise((resolve) => {
+  if (process.platform !== 'darwin') {
+    resolve(null);
+    return;
+  }
+  execFile('/usr/bin/osascript', ['-e', 'output volume of (get volume settings)'], { timeout: 1500 }, (error, stdout) => {
+    if (error) {
+      resolve(null);
+      return;
+    }
+    const value = Number.parseInt(String(stdout).trim(), 10);
+    resolve(Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : null);
+  });
+}));
+
 ipcMain.on('pixel-clock:sync', (_event, state) => {
   if (state && typeof state === 'object') {
     currentState = state;
@@ -327,23 +353,27 @@ ipcMain.on('pixel-clock:sync', (_event, state) => {
 
 ipcMain.handle('pixel-clock:layout', (_event, payload) => {
   const size = clampSize(payload && payload.size);
-  return applyLayout(size, !!(payload && payload.open));
+  return applyLayout(size, !!(payload && payload.open), payload && payload.labelWidth, payload && payload.panelHeight);
 });
 
 ipcMain.on('pixel-clock:begin-drag', (_event, sx, sy) => {
   if (!win || win.isDestroyed()) return;
   const bounds = win.getBounds();
-  drag = { winX: bounds.x, winY: bounds.y, sx, sy };
+  drag = { winX: bounds.x, winY: bounds.y, sx, sy, left: rootOffset.left, top: rootOffset.top };
 });
 
 ipcMain.on('pixel-clock:drag-to', (_event, sx, sy) => {
   if (!win || win.isDestroyed() || !drag) return;
   const bounds = win.getBounds();
   const display = screen.getDisplayNearestPoint({ x: sx, y: sy }).workArea;
-  const maxX = Math.max(display.x + 8, display.x + display.width - bounds.width - 8);
-  const maxY = Math.max(display.y + 8, display.y + display.height - bounds.height - 8);
-  const x = Math.min(Math.max(drag.winX + (sx - drag.sx), display.x + 8), maxX);
-  const y = Math.min(Math.max(drag.winY + (sy - drag.sy), display.y + 8), maxY);
+  // Clamp the sphere, not the window: the transparent padding may hang off the
+  // screen so the planet can sit right at the edge.
+  const minX = display.x + EDGE - drag.left;
+  const maxX = Math.max(minX, display.x + display.width - EDGE - drag.left - planetSize);
+  const minY = display.y + EDGE - drag.top;
+  const maxY = Math.max(minY, display.y + display.height - EDGE - drag.top - planetSize);
+  const x = Math.min(Math.max(drag.winX + (sx - drag.sx), minX), maxX);
+  const y = Math.min(Math.max(drag.winY + (sy - drag.sy), minY), maxY);
   win.setPosition(Math.round(x), Math.round(y), false);
 });
 

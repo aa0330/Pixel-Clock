@@ -19,3 +19,12 @@
 - 完整许可见 `desktop/vendor/REACT-LICENSE.txt`
 
 仅用于桌面 helper 页面。
+
+## 背景氛围音
+
+- 文件：`assets/ambience-rain.m4a`、`assets/ambience-night.m4a`、`assets/ambience-indoor.m4a`、`assets/ambience-evening.m4a`
+- 来源：用户提供的 ASMR 混音（雨声溪流 / 雨夜白噪 / 室内雨声 / 夜晚环境），统一裁剪为 120 秒并加 10ms 淡入淡出，经 afconvert 转为 64 kbps 单声道 AAC
+- 许可：随项目一同使用，发布前请自行确认原始音频的授权范围
+
+音频在构建时以 base64 内嵌进 `client.js`，运行时解码为 AudioBuffer 循环播放。
+

@@ -20,8 +20,8 @@ window.__ModuleLoader__.load({
         modeApp: '应用内',
         modeDesktop: '桌面',
         settings: '设置',
-        prevPlanet: '上一个星球：{name}',
-        nextPlanet: '下一个星球：{name}',
+        prevTrack: '上一个音轨：{name}',
+        nextTrack: '下一个音轨：{name}',
         focus: '专注',
         rest: '休息',
         paused: '已暂停',
@@ -29,8 +29,8 @@ window.__ModuleLoader__.load({
         idleHint: '右键设置 · {minutes} 分钟专注',
         breakReady: '该休息了',
         focusReady: '下一轮专注',
-        hint: '单击加速自转，右键打开设置，按住拖动位置，← → 换星球',
-        timerHint: '右键星球打开设置 · 空格 开始/暂停 · R 重置 · S 跳过 · ← → 换星球',
+        hint: '单击加速自转，右键打开设置，按住拖动位置，← → 换音轨',
+        timerHint: '右键星球打开设置 · 空格 开始/暂停 · R 重置 · S 跳过 · ← → 换音轨',
         doneToday: '今日完成',
         clockTab: '时钟',
         todos: '待办',
@@ -60,6 +60,16 @@ window.__ModuleLoader__.load({
         breakDoneBody: '回来继续专注 {minutes} 分钟',
         autoStart: '自动开始下一段',
         sound: '提示音',
+        music: '背景音乐',
+        audio: '音效',
+        musicVolume: '音量',
+        musicTrack: '音轨',
+        trackRain: '雨声溪流',
+        trackNight: '雨夜白噪',
+        trackIndoor: '室内雨声',
+        trackEvening: '夜晚环境',
+        musicHint: '专注时循环播放，休息自动停止',
+        volumeCapped: '系统音量 {system}%，应用音量已限制在 {max}% 以内',
         notify: '桌面通知',
         detach: '弹出到桌面',
         desktopUnavailable: '桌面窗口不可用，请确认 Electron 运行时已安装',
@@ -81,8 +91,8 @@ window.__ModuleLoader__.load({
         modeApp: 'In app',
         modeDesktop: 'Desktop',
         settings: 'Settings',
-        prevPlanet: 'Previous planet: {name}',
-        nextPlanet: 'Next planet: {name}',
+        prevTrack: 'Previous ambience: {name}',
+        nextTrack: 'Next ambience: {name}',
         focus: 'Focus',
         rest: 'Break',
         paused: 'Paused',
@@ -90,8 +100,8 @@ window.__ModuleLoader__.load({
         idleHint: 'Right-click for settings · {minutes} min',
         breakReady: 'Time for a break',
         focusReady: 'Next focus',
-        hint: 'Click to spin, right-click for settings, drag to move, ← → to switch planets',
-        timerHint: 'Right-click the planet for settings · Space start/pause · R reset · S skip · ← → switch planet',
+        hint: 'Click to spin, right-click for settings, drag to move, ← → to switch ambience',
+        timerHint: 'Right-click the planet for settings · Space start/pause · R reset · S skip · ← → switch ambience',
         doneToday: 'done today',
         clockTab: 'Clock',
         todos: 'To-do',
@@ -121,6 +131,16 @@ window.__ModuleLoader__.load({
         breakDoneBody: 'Back to focus for {minutes} min',
         autoStart: 'Auto-start next',
         sound: 'Chime',
+        music: 'Music',
+        audio: 'Audio',
+        musicVolume: 'Volume',
+        musicTrack: 'Track',
+        trackRain: 'Rain & stream',
+        trackNight: 'Rainy night',
+        trackIndoor: 'Indoor rain',
+        trackEvening: 'Night ambience',
+        musicHint: 'Loops during focus, stops on breaks',
+        volumeCapped: 'System volume {system}% — app volume capped at {max}%',
         notify: 'Notify',
         detach: 'Send to desktop',
         desktopUnavailable: 'Desktop window unavailable — check the Electron runtime',
@@ -141,6 +161,10 @@ window.__ModuleLoader__.load({
     const MIN_SIZE = 80;
     const MAX_SIZE = 180;
     const SIZE_STEP = 4;
+
+    /** Preset stops shown as clickable dots under the size and volume sliders. */
+    const SIZE_TICKS = [80, 100, 124, 148, 180];
+    const VOLUME_TICKS = [0, 25, 50, 75, 100];
     const DPR_CAP = 2;
     const POSITION_KEY = 'pixel-clock:position';
     const TIMER_KEY = 'pixel-clock:timer';
@@ -154,6 +178,23 @@ window.__ModuleLoader__.load({
     const EDGE = 8;
     const LABEL_TOP_SPACE = 44;
 
+    /** Bundled ambience loops; all four are inlined by build.mjs. */
+    const AMBIENCE_TRACKS = {
+      rain: "__AMBIENCE_RAIN_URL__",
+      night: "__AMBIENCE_NIGHT_URL__",
+      indoor: "__AMBIENCE_INDOOR_URL__",
+      evening: "__AMBIENCE_EVENING_URL__",
+    };
+
+    /** Cycle order for the side chevrons and the arrow keys. */
+    const AMBIENCE_ORDER = ['rain', 'night', 'indoor', 'evening'];
+    const AMBIENCE_LABELS = {
+      rain: 'trackRain',
+      night: 'trackNight',
+      indoor: 'trackIndoor',
+      evening: 'trackEvening',
+    };
+
     /** Classic pomodoro cadence; the fourth focus session earns a long break. */
     const DEFAULT_SETTINGS = {
       focus: 25,
@@ -163,6 +204,9 @@ window.__ModuleLoader__.load({
       mode: 'desktop',
       autoStart: false,
       sound: true,
+      music: false,
+      musicVolume: 35,
+      musicTrack: 'rain',
       notify: true,
     };
 
@@ -415,9 +459,9 @@ window.__ModuleLoader__.load({
 }
 .${CLASS}__planet-btn {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   top: 50%;
-  width: 30px;
+  width: 24px;
   height: 56px;
   padding: 0;
   display: grid;
@@ -425,43 +469,41 @@ window.__ModuleLoader__.load({
   border: 0;
   background: none;
   box-shadow: none;
-  color: var(--dsw-alias-label-secondary, #4a5b68);
+  color: var(--ap-accent, #83c95b);
   cursor: pointer;
   opacity: 0;
   pointer-events: auto;
   transform: translateY(-50%);
-  transition: opacity 0.25s ease, color 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 .${CLASS}__planet-btn[data-dir='prev'] {
-  left: -30px;
+  left: -26px;
 }
 .${CLASS}__planet-btn[data-dir='next'] {
-  right: -30px;
+  right: -26px;
 }
 .${CLASS}__planet-btn:hover {
-  opacity: 0.62;
-  color: var(--ap-accent, #4f9655);
+  opacity: 0.5;
 }
 .${CLASS}__planet-btn:focus-visible {
-  opacity: 1;
-  outline: 2px solid color-mix(in srgb, var(--ap-accent, #83c95b) 45%, transparent);
-  outline-offset: 0;
-  border-radius: 6px;
+  opacity: 0.7;
+  outline: none;
 }
 .${CLASS}[data-panel]:not([data-panel='closed']) .${CLASS}__planet-btn {
   display: none;
 }
 .${CLASS}__planet-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
   display: block;
 }
 .${CLASS}__panel {
   position: absolute;
-  right: calc(100% + 12px);
+  right: calc(100% + 8px);
   top: 50%;
   transform: translateY(calc(-50% + var(--ap-shift, 0px)));
   width: 276px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   max-height: 380px;
@@ -478,7 +520,7 @@ window.__ModuleLoader__.load({
 }
 .${CLASS}[data-side='right'] .${CLASS}__panel {
   right: auto;
-  left: calc(100% + 12px);
+  left: calc(100% + 8px);
 }
 .${CLASS}__tabs {
   display: flex;
@@ -811,6 +853,82 @@ window.__ModuleLoader__.load({
   accent-color: var(--dsw-alias-brand-primary, #4f9655);
   cursor: pointer;
 }
+.${CLASS}__volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary, #5b6b78);
+}
+.${CLASS}__volume span {
+  flex: none;
+}
+.${CLASS}__volume span:last-child {
+  width: 34px;
+  text-align: right;
+  color: var(--dsw-alias-label-tertiary, #7d8b96);
+  font-variant-numeric: tabular-nums;
+}
+.${CLASS}__volume input[type="range"]:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.${CLASS}__range-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.${CLASS}__range-wrap input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+.${CLASS}__ticks {
+  position: absolute;
+  left: 5.5px;
+  right: 5.5px;
+  top: 50%;
+  height: 0;
+  pointer-events: none;
+}
+.${CLASS}__tick {
+  position: absolute;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.${CLASS}__tick::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--dsw-alias-label-tertiary, #7d8b96);
+  opacity: 0.5;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.${CLASS}__tick:hover::after {
+  transform: translate(-50%, -50%) scale(1.7);
+  opacity: 1;
+}
+.${CLASS}__tick:focus-visible {
+  outline: none;
+}
+.${CLASS}__tick:focus-visible::after {
+  background: var(--ap-accent, #83c95b);
+  opacity: 1;
+}
 .${CLASS}__note {
   margin-top: 8px;
   font-size: 11px;
@@ -983,8 +1101,14 @@ window.__ModuleLoader__.load({
           base.size = clampSize(stored.size);
         }
         if (stored.mode === 'app' || stored.mode === 'desktop') base.mode = stored.mode;
-        for (const key of ['autoStart', 'sound', 'notify']) {
+        for (const key of ['autoStart', 'sound', 'music', 'notify']) {
           if (typeof stored[key] === 'boolean') base[key] = stored[key];
+        }
+        if (typeof stored.musicVolume === 'number' && Number.isFinite(stored.musicVolume)) {
+          base.musicVolume = Math.min(100, Math.max(0, Math.round(stored.musicVolume)));
+        }
+        if (typeof stored.musicTrack === 'string' && AMBIENCE_TRACKS[stored.musicTrack]) {
+          base.musicTrack = stored.musicTrack;
         }
       } catch (error) {
         /* fall back to the classic cadence */
@@ -1193,6 +1317,110 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * Loops the selected bundled ambience through one decoded AudioBuffer,
+     * which keeps the repeat sample-accurate (an <audio loop> leaves a gap at
+     * the seam) and lets the shared AudioContext own the volume ramps.
+     */
+    function createAmbience(audio) {
+      const master = audio.createGain();
+      master.gain.value = 0.0001;
+      master.connect(audio.destination);
+
+      const buffers = {};
+      let current = null;
+      let playing = false;
+      let level = DEFAULT_SETTINGS.musicVolume / 100;
+      let track = DEFAULT_SETTINGS.musicTrack;
+
+      function load(id) {
+        if (!buffers[id]) {
+          buffers[id] = fetch(AMBIENCE_TRACKS[id])
+            .then((response) => response.arrayBuffer())
+            .then((data) => audio.decodeAudioData(data))
+            .catch((error) => {
+              delete buffers[id];
+              throw error;
+            });
+        }
+        return buffers[id];
+      }
+
+      function play() {
+        const id = track;
+        load(id)
+          .then((buffer) => {
+            if (!playing || id !== track) return;
+            const source = audio.createBufferSource();
+            const gain = audio.createGain();
+            source.buffer = buffer;
+            source.loop = true;
+            source.connect(gain);
+            gain.connect(master);
+            gain.gain.value = 1;
+            source.start();
+            current = { source, gain };
+          })
+          .catch(() => {
+            playing = false;
+          });
+      }
+
+      /** A 200 ms fade keeps switching tracks from clicking. */
+      function fadeOut(node) {
+        if (!node) return;
+        const now = audio.currentTime;
+        try {
+          node.gain.gain.cancelScheduledValues(now);
+          node.gain.gain.setValueAtTime(node.gain.gain.value, now);
+          node.gain.gain.linearRampToValueAtTime(0.0001, now + 0.2);
+          node.source.stop(now + 0.25);
+        } catch (error) {
+          /* already stopped */
+        }
+      }
+
+      function start() {
+        if (playing) return;
+        playing = true;
+        const now = audio.currentTime;
+        master.gain.cancelScheduledValues(now);
+        master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), now);
+        master.gain.linearRampToValueAtTime(Math.max(0.0001, level), now + 1.2);
+        play();
+      }
+
+      function stop() {
+        playing = false;
+        const now = audio.currentTime;
+        master.gain.cancelScheduledValues(now);
+        master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), now);
+        master.gain.linearRampToValueAtTime(0.0001, now + 0.6);
+        fadeOut(current);
+        current = null;
+      }
+
+      function setTrack(id) {
+        if (!AMBIENCE_TRACKS[id] || id === track) return;
+        track = id;
+        if (!playing) return;
+        fadeOut(current);
+        current = null;
+        play();
+      }
+
+      function setVolume(value) {
+        level = Math.min(1, Math.max(0, value));
+        if (!playing) return;
+        const now = audio.currentTime;
+        master.gain.cancelScheduledValues(now);
+        master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), now);
+        master.gain.linearRampToValueAtTime(Math.max(0.0001, level), now + 0.2);
+      }
+
+      return { start, stop, setVolume, setTrack };
+    }
+
     function PlanetTimer({ t, locale, onDetach, initialNotice }) {
       const desktop = typeof window !== 'undefined' && window.pixelClockDesktop ? window.pixelClockDesktop : null;
       const canvasRef = React.useRef(null);
@@ -1200,6 +1428,7 @@ window.__ModuleLoader__.load({
       const surfaceRef = React.useRef(null);
       const [status, setStatus] = React.useState('pending');
       const [settings, setSettings] = React.useState(readSettings);
+      const [systemVolume, setSystemVolume] = React.useState(null);
       const [themeId, setThemeId] = React.useState(readTheme);
       const [timer, setTimer] = React.useState(() => readTimer(settings));
       const [now, setNow] = React.useState(Date.now());
@@ -1212,7 +1441,7 @@ window.__ModuleLoader__.load({
         return forced === 'clock' || forced === 'todo' || forced === 'settings' ? forced : 'closed';
       });
       const [side, setSide] = React.useState('left');
-      const [desktopLayout, setDesktopLayout] = React.useState({ left: 28, top: 42, side: 'left' });
+      const [desktopLayout, setDesktopLayout] = React.useState({ left: 30, top: 40, side: 'left' });
       const [labelShift, setLabelShift] = React.useState(0);
       const [shift, setShift] = React.useState(0);
       const [todos, setTodos] = React.useState(readTodos);
@@ -1231,6 +1460,7 @@ window.__ModuleLoader__.load({
       const progressRef = React.useRef(0);
       const burst = React.useRef(0);
       const audioRef = React.useRef(null);
+      const musicRef = React.useRef(null);
       const rootRef = React.useRef(null);
       const panelRef = React.useRef(null);
       const todoInputRef = React.useRef(null);
@@ -1250,13 +1480,52 @@ window.__ModuleLoader__.load({
       const clock = formatClock(remainMs);
       const todayDone = timer.doneDate === dayKey() ? timer.doneToday : 0;
       const planet = PLANETS.find((item) => item.id === themeId) || PLANETS[0];
-      const planetIndex = PLANETS.indexOf(planet);
       const planetName = t(planet.nameKey);
       const size = clampSize(settings.size);
+      // A loud system plus a loud app is unpleasant; cap the app volume when
+      // the Mac's own output is already high.
+      const volumeCeiling = systemVolume === null ? 100 : systemVolume > 85 ? 55 : systemVolume > 70 ? 70 : 100;
+      const shownVolume = Math.min(settings.musicVolume, volumeCeiling);
 
       positionRef.current = position;
       timerRef.current = timer;
       progressRef.current = progress;
+
+      // Background ambience only runs through the focus phase; a break, a
+      // pause or a reset fades it out. The toggle click and the start button
+      // are the gestures that unlock the shared AudioContext.
+      React.useEffect(() => {
+        if (!settings.music || timer.status !== 'running' || timer.phase !== 'focus') {
+          if (musicRef.current) musicRef.current.stop();
+          return undefined;
+        }
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtor) return undefined;
+        if (!audioRef.current) {
+          try {
+            audioRef.current = new AudioCtor();
+          } catch (error) {
+            return undefined;
+          }
+        }
+        const audio = audioRef.current;
+        if (audio.state === 'suspended') audio.resume().catch(() => {});
+        if (!musicRef.current) musicRef.current = createAmbience(audio);
+        musicRef.current.setTrack(settings.musicTrack);
+        musicRef.current.setVolume(shownVolume / 100);
+        musicRef.current.start();
+        return () => {
+          if (musicRef.current) musicRef.current.stop();
+        };
+      }, [settings.music, timer.status, timer.phase]);
+
+      React.useEffect(() => {
+        if (musicRef.current) musicRef.current.setVolume(shownVolume / 100);
+      }, [shownVolume]);
+
+      React.useEffect(() => {
+        if (musicRef.current) musicRef.current.setTrack(settings.musicTrack);
+      }, [settings.musicTrack]);
 
       // The bound `t` reads the live locale; a redraw is needed when it changes.
       React.useEffect(() => {
@@ -1357,23 +1626,61 @@ window.__ModuleLoader__.load({
 
       // In the desktop window the helper resizes around the open popover,
       // so the root offset (and the popover side) come from the host process.
+      // The window only widens for the label or the panel, never by a fixed
+      // margin, which keeps the transparent frame tight around the planet.
       React.useEffect(() => {
         if (!desktop) return undefined;
         let alive = true;
-        Promise.resolve(desktop.layout({ open: panel !== 'closed', size }))
-          .then((next) => {
-            if (!alive || !next) return;
-            setDesktopLayout({
-              left: Number.isFinite(next.left) ? next.left : 28,
-              top: Number.isFinite(next.top) ? next.top : 42,
-              side: next.side === 'right' ? 'right' : 'left',
-            });
+        const push = () => {
+          if (!alive) return;
+          const label = labelRef.current;
+          const panelEl = panelRef.current;
+          Promise.resolve(
+            desktop.layout({
+              open: panel !== 'closed',
+              size,
+              labelWidth: label ? label.offsetWidth : 0,
+              panelHeight: panelEl ? panelEl.offsetHeight : 0,
+            }),
+          )
+            .then((next) => {
+              if (!alive || !next) return;
+              setDesktopLayout({
+                left: Number.isFinite(next.left) ? next.left : 8,
+                top: Number.isFinite(next.top) ? next.top : 40,
+                side: next.side === 'right' ? 'right' : 'left',
+              });
+            })
+            .catch(() => {});
+        };
+        push();
+        let observer = null;
+        if (typeof ResizeObserver === 'function') {
+          observer = new ResizeObserver(push);
+          if (labelRef.current) observer.observe(labelRef.current);
+          if (panelRef.current) observer.observe(panelRef.current);
+        }
+        return () => {
+          alive = false;
+          if (observer) observer.disconnect();
+        };
+      }, [desktop, panel, size]);
+
+      // Re-read the Mac's output volume whenever the settings pane opens, so
+      // the cap follows whatever the user did in Control Center.
+      React.useEffect(() => {
+        if (!desktop || typeof desktop.systemVolume !== 'function') return undefined;
+        let alive = true;
+        Promise.resolve(desktop.systemVolume())
+          .then((value) => {
+            if (!alive) return;
+            setSystemVolume(typeof value === 'number' && Number.isFinite(value) ? value : null);
           })
           .catch(() => {});
         return () => {
           alive = false;
         };
-      }, [desktop, panel, size]);
+      }, [desktop, panel]);
 
       // Keep the popover on screen wherever the planet was dragged to.
       React.useEffect(() => {
@@ -1686,6 +1993,17 @@ window.__ModuleLoader__.load({
         if (patch.size !== undefined) next.size = clampSize(patch.size);
         setSettings(next);
         if (patch.notify) askNotify();
+        if (patch.music) {
+          const AudioCtor = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtor && !audioRef.current) {
+            try {
+              audioRef.current = new AudioCtor();
+            } catch (error) {
+              /* audio unavailable; the timer still runs */
+            }
+          }
+          if (audioRef.current && audioRef.current.state === 'suspended') audioRef.current.resume().catch(() => {});
+        }
         setTimer((prev) => {
           if (prev.status === 'running' || prev.status === 'paused') return prev;
           const ms = phaseMs(prev.phase, next);
@@ -1756,10 +2074,11 @@ window.__ModuleLoader__.load({
         setPokes((n) => n + 1);
       };
 
-      const stepPlanet = (step) => {
-        const index = PLANETS.findIndex((item) => item.id === themeId);
-        const next = PLANETS[(index + step + PLANETS.length) % PLANETS.length];
-        if (next) selectPlanet(next.id);
+      /** The side chevrons and the arrow keys cycle the ambience track. */
+      const stepTrack = (step) => {
+        const index = AMBIENCE_ORDER.indexOf(settings.musicTrack);
+        const next = AMBIENCE_ORDER[(index + step + AMBIENCE_ORDER.length) % AMBIENCE_ORDER.length];
+        if (next) updateSettings({ musicTrack: next });
       };
 
       const addTodo = () => {
@@ -1898,10 +2217,10 @@ window.__ModuleLoader__.load({
           openSettings();
         } else if (event.key === 'ArrowLeft') {
           event.preventDefault();
-          stepPlanet(-1);
+          stepTrack(-1);
         } else if (event.key === 'ArrowRight') {
           event.preventDefault();
-          stepPlanet(1);
+          stepTrack(1);
         } else if (event.key === 'Escape') {
           if (panel !== 'closed') {
             event.preventDefault();
@@ -2004,8 +2323,9 @@ window.__ModuleLoader__.load({
         '--ap-label-x': `${labelShift}px`,
       };
       const circumference = 2 * Math.PI * 46;
-      const prevPlanet = PLANETS[(planetIndex - 1 + PLANETS.length) % PLANETS.length];
-      const nextPlanet = PLANETS[(planetIndex + 1) % PLANETS.length];
+      const trackIndex = AMBIENCE_ORDER.indexOf(settings.musicTrack);
+      const prevTrack = AMBIENCE_ORDER[(trackIndex - 1 + AMBIENCE_ORDER.length) % AMBIENCE_ORDER.length];
+      const nextTrack = AMBIENCE_ORDER[(trackIndex + 1) % AMBIENCE_ORDER.length];
       const surfaceProps = {
         role: 'button',
         tabIndex: 0,
@@ -2226,16 +2546,35 @@ window.__ModuleLoader__.load({
           'div',
           { className: `${CLASS}__setting` },
           h('span', { className: `${CLASS}__setting-label` }, t('size')),
-          h('input', {
-            type: 'range',
-            className: `${CLASS}__range`,
-            min: MIN_SIZE,
-            max: MAX_SIZE,
-            step: SIZE_STEP,
-            value: settings.size,
-            'aria-label': t('size'),
-            onChange: (event) => updateSettings({ size: Number(event.target.value) }),
-          }),
+          h(
+            'div',
+            { className: `${CLASS}__range-wrap` },
+            h('input', {
+              type: 'range',
+              className: `${CLASS}__range`,
+              min: MIN_SIZE,
+              max: MAX_SIZE,
+              step: SIZE_STEP,
+              value: settings.size,
+              'aria-label': t('size'),
+              onChange: (event) => updateSettings({ size: Number(event.target.value) }),
+            }),
+            h(
+              'div',
+              { className: `${CLASS}__ticks` },
+              SIZE_TICKS.map((value) =>
+                h('button', {
+                  key: value,
+                  type: 'button',
+                  className: `${CLASS}__tick`,
+                  style: { left: `${((value - MIN_SIZE) / (MAX_SIZE - MIN_SIZE)) * 100}%` },
+                  title: `${value}px`,
+                  'aria-label': `${t('size')} ${value}px`,
+                  onClick: () => updateSettings({ size: value }),
+                }),
+              ),
+            ),
+          ),
           h('span', { className: `${CLASS}__range-value` }, `${settings.size}px`),
         ),
         h(
@@ -2288,6 +2627,81 @@ window.__ModuleLoader__.load({
             t('notify'),
           ),
         ),
+        h('div', { className: `${CLASS}__divider` }),
+        h('div', { className: `${CLASS}__section-title` }, t('audio')),
+        h(
+          'label',
+          { className: `${CLASS}__option` },
+          h('input', { type: 'checkbox', checked: settings.music, onChange: (event) => updateSettings({ music: event.target.checked }) }),
+          t('music'),
+        ),
+        h(
+          'div',
+          { className: `${CLASS}__volume` },
+          h('span', null, t('musicVolume')),
+          h(
+            'div',
+            { className: `${CLASS}__range-wrap` },
+            h('input', {
+              type: 'range',
+              className: `${CLASS}__range`,
+              min: 0,
+              max: volumeCeiling,
+              step: 5,
+              value: shownVolume,
+              disabled: !settings.music,
+              'aria-label': t('musicVolume'),
+              onChange: (event) => updateSettings({ musicVolume: Math.min(Number(event.target.value), volumeCeiling) }),
+            }),
+            h(
+              'div',
+              { className: `${CLASS}__ticks` },
+              VOLUME_TICKS.filter((value) => value <= volumeCeiling).map((value) =>
+                h('button', {
+                  key: value,
+                  type: 'button',
+                  className: `${CLASS}__tick`,
+                  style: { left: `${(value / volumeCeiling) * 100}%` },
+                  title: `${value}%`,
+                  'aria-label': `${t('musicVolume')} ${value}%`,
+                  onClick: () => updateSettings({ musicVolume: Math.min(value, volumeCeiling) }),
+                }),
+              ),
+            ),
+          ),
+          h('span', null, `${shownVolume}%`),
+        ),
+        volumeCeiling < 100
+          ? h('div', { className: `${CLASS}__note` }, t('volumeCapped', { system: systemVolume, max: volumeCeiling }))
+          : null,
+        h(
+          'div',
+          { className: `${CLASS}__setting` },
+          h('span', { className: `${CLASS}__setting-label` }, t('musicTrack')),
+          h(
+            'div',
+            { className: `${CLASS}__chips` },
+            [
+              ['rain', 'trackRain'],
+              ['night', 'trackNight'],
+              ['indoor', 'trackIndoor'],
+              ['evening', 'trackEvening'],
+            ].map(([value, labelKey]) =>
+              h(
+                'button',
+                {
+                  key: value,
+                  type: 'button',
+                  className: `${CLASS}__chip`,
+                  'aria-pressed': settings.musicTrack === value ? 'true' : 'false',
+                  onClick: () => updateSettings({ musicTrack: value }),
+                },
+                t(labelKey),
+              ),
+            ),
+          ),
+        ),
+        h('div', { className: `${CLASS}__note` }, t('musicHint')),
       );
 
       const todoPane = h(
@@ -2375,9 +2789,9 @@ window.__ModuleLoader__.load({
             type: 'button',
             className: `${CLASS}__planet-btn`,
             'data-dir': 'prev',
-            title: t('prevPlanet', { name: t(prevPlanet.nameKey) }),
-            'aria-label': t('prevPlanet', { name: t(prevPlanet.nameKey) }),
-            onClick: () => selectPlanet(prevPlanet.id),
+            title: t('prevTrack', { name: t(AMBIENCE_LABELS[prevTrack]) }),
+            'aria-label': t('prevTrack', { name: t(AMBIENCE_LABELS[prevTrack]) }),
+            onClick: () => stepTrack(-1),
           },
           chevron('prev'),
         ),
@@ -2387,9 +2801,9 @@ window.__ModuleLoader__.load({
             type: 'button',
             className: `${CLASS}__planet-btn`,
             'data-dir': 'next',
-            title: t('nextPlanet', { name: t(nextPlanet.nameKey) }),
-            'aria-label': t('nextPlanet', { name: t(nextPlanet.nameKey) }),
-            onClick: () => selectPlanet(nextPlanet.id),
+            title: t('nextTrack', { name: t(AMBIENCE_LABELS[nextTrack]) }),
+            'aria-label': t('nextTrack', { name: t(AMBIENCE_LABELS[nextTrack]) }),
+            onClick: () => stepTrack(1),
           },
           chevron('next'),
         ),
